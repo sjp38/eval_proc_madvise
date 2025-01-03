@@ -5,42 +5,164 @@
 #include <sys/syscall.h>
 #include <sys/uio.h>
 #include <unistd.h>
+#include <time.h>
 
 #define SZ_PAGE (4096)
-#define NR_PAGES (16)
-#define MMAP_SZ	(SZ_PAGE * NR_PAGES)
 
-int main(void)
+/* measure time to do madvise() vs process_madvise() */
+
+int measure_madvise(int hint, int sz_mem_to_hint, int sz_single_madvise,
+		int measure_batch)
+{
+	char *buf;
+	int i, err, start;
+	struct timespec measure_start, measure_end;
+
+	buf = mmap(NULL, sz_mem_to_hint, PROT_READ | PROT_WRITE, MAP_PRIVATE |
+			MAP_ANON, -1, 0);
+	if (buf == MAP_FAILED) {
+		perror("mmap fail");
+		return -1;
+	}
+
+	err = clock_gettime(CLOCK_MONOTONIC, &measure_start);
+	if (err) {
+		perror("clock_gettime() failed\n");
+		goto out;
+	}
+	for (i = 0; i < measure_batch; i++) {
+		for (start = 0; start < sz_mem_to_hint;
+				start += sz_single_madvise) {
+			err = madvise(&buf[start], sz_single_madvise, hint);
+			if (err) {
+				perror("madvise fail");
+				goto out;
+			}
+		}
+	}
+	err = clock_gettime(CLOCK_MONOTONIC, &measure_end);
+	if (err) {
+		perror("clock_gettime() failed\n");
+		goto out;
+	}
+	printf("%lu\n", (measure_end.tv_sec * 1000000000 + measure_end.tv_nsec
+				- measure_start.tv_sec * 1000000000 -
+				measure_start.tv_nsec) / measure_batch);
+
+out:
+	err = munmap(buf, sz_mem_to_hint);
+	if (err)
+		perror("munamap fail");
+	return err;
+}
+
+int measure_p_madvise(int hint, int sz_mem_to_hint,
+		int sz_single_madvise, int sz_single_p_madvise,
+		int measure_batch)
+{
+	pid_t pid = getpid();
+	int pidfd = syscall(SYS_pidfd_open, pid, 0);
+	struct iovec *vec;
+	char *buf;
+	int i, err, start;
+	struct timespec measure_start, measure_end;
+	int len_vec = sz_single_p_madvise / sz_single_madvise;
+	int ret;
+
+	if (pidfd == -1) {
+		perror("pidfd_open fail");
+		return -1;
+	}
+
+	buf = mmap(NULL, sz_mem_to_hint, PROT_READ | PROT_WRITE, MAP_PRIVATE |
+			MAP_ANON, -1, 0);
+	if (buf == MAP_FAILED) {
+		perror("mmap fail");
+		goto out;
+	}
+
+	vec = malloc(sizeof(*vec) * len_vec);
+	if (!vec) {
+		perror("iovec alloc fail");
+		goto free_buf_out;
+	}
+
+	err = clock_gettime(CLOCK_MONOTONIC, &measure_start);
+	if (err) {
+		perror("clock_gettime() failed\n");
+		goto free_vec_out;
+	}
+	for (i = 0; i < measure_batch; i++) {
+		for (start = 0; start < sz_mem_to_hint;
+				start += sz_single_p_madvise) {
+			int j;
+
+			for (j = 0; j < len_vec; j++) {
+				vec[j].iov_base = &buf[
+					start + j * sz_single_madvise];
+				vec[j].iov_len = sz_single_madvise;
+			}
+			ret = syscall(SYS_process_madvise, pidfd, vec, len_vec, hint, 0);
+			if (ret != len_vec * sz_single_madvise) {
+				perror("process_madivse fail\n");
+				goto free_vec_out;
+			}
+		}
+	}
+	err = clock_gettime(CLOCK_MONOTONIC, &measure_end);
+	if (err) {
+		perror("clock_gettime() failed\n");
+		goto free_vec_out;
+	}
+	printf("%lu\n", (measure_end.tv_sec * 1000000000 + measure_end.tv_nsec
+				- measure_start.tv_sec * 1000000000 -
+				measure_start.tv_nsec) / measure_batch);
+
+free_vec_out:
+	free(vec);
+free_buf_out:
+	err = munmap(buf, sz_mem_to_hint);
+	if (err)
+		perror("munamap fail");
+out:
+	close(pidfd);
+	return err;
+}
+
+void usage(char *cmd)
+{
+	printf("usage: %s <hint> <sz_mem> <sz_madv> <sz_p_madv> <nr_measures>\n", cmd);
+}
+
+int main(int argc, char *argv[])
 {
 	char *buf;
 	unsigned int i;
 	int ret;
-	pid_t pid = getpid();
-	int pidfd = syscall(SYS_pidfd_open, pid, 0);
-	struct iovec *vec;
-	buf = mmap(NULL, MMAP_SZ, PROT_READ | PROT_WRITE, MAP_PRIVATE |
-			MAP_ANON, -1, 0);
-	if (buf == MAP_FAILED) {
-		printf("mmap fail\n");
+	int hint, sz_mem_to_hint;
+	int sz_single_madvise, sz_single_p_madvise;
+	int measure_batch;
+	int err;
+
+	if (argc != 6) {
+		usage(argv[0]);
 		return -1;
 	}
-	vec = malloc(sizeof(*vec) * NR_PAGES);
-	for (i = 0; i < NR_PAGES; i++) {
-		vec[i].iov_base = &buf[i * SZ_PAGE];
-		vec[i].iov_len = SZ_PAGE;
-	}
-	ret = syscall(SYS_process_madvise, pidfd, vec, NR_PAGES,
-			MADV_DONTNEED, 0);
-	if (ret != MMAP_SZ) {
-		printf("process_madvise fail\n");
-		return -1;
-	}
-	ret = munmap(buf, MMAP_SZ);
-	if (ret) {
-		printf("munmap failed\n");
-		return -1;
-	}
-	close(pidfd);
-	printf("good\n");
-	return 0;
+
+	hint = atoi(argv[1]);
+	sz_mem_to_hint = atoi(argv[2]);
+	sz_single_madvise = atoi(argv[3]);
+	sz_single_p_madvise = atoi(argv[4]);
+	measure_batch = atoi(argv[5]);
+
+	sz_mem_to_hint = sz_mem_to_hint / SZ_PAGE * SZ_PAGE;
+	sz_single_madvise = sz_single_madvise / SZ_PAGE * SZ_PAGE;
+
+	err = measure_madvise(hint, sz_mem_to_hint, sz_single_madvise,
+			measure_batch);
+	if (err)
+		return err;
+	err = measure_p_madvise(hint, sz_mem_to_hint, sz_single_madvise,
+			sz_single_p_madvise, measure_batch);
+	return err;
 }
