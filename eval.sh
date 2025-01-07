@@ -23,6 +23,10 @@ do
 	for pmadv_batch in 1 2 4 8 16 32 64 128 256 512 1024
 	do
 		sz_p_madv=$((pmadv_batch * sz_madv))
+		if [ "$sz_p_madv" -gt "$sz_mem" ]
+		then
+			break
+		fi
 		latency=$(./eval_pmadv "$hint" "$sz_mem" "$sz_madv" "$sz_p_madv" \
 			"$nr_measures")
 		echo "$hint $sz_mem $sz_madv $pmadv_batch pmadv $latency"
