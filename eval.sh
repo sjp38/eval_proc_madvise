@@ -9,7 +9,7 @@ hint=4	#MADV_DONTNEED
 nr_measures=100
 sz_mem=$((256*1024*1024))	# 256 MiB
 
-echo "# <nr_measures> 100"
+echo "# <nr_measures> $nr_measures"
 echo "# <hint> <sz_mem> <sz_madv> <pmadv_batch> <madv|pmadv> <latency>"
 
 for sz_madv_pg in 1 2 4 8 16 32 64 128 256 512 1024
