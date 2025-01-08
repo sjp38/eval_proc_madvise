@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
@@ -23,6 +24,7 @@ int measure_p_madvise(int hint, int sz_mem_to_hint,
 	struct timespec measure_start, measure_end;
 	int len_vec = sz_single_p_madvise / sz_single_madvise;
 	int ret;
+	unsigned long elapsed_ns = 0;
 
 	if (pidfd == -1) {
 		perror("pidfd_open fail");
@@ -42,12 +44,14 @@ int measure_p_madvise(int hint, int sz_mem_to_hint,
 		goto free_buf_out;
 	}
 
-	err = clock_gettime(CLOCK_MONOTONIC, &measure_start);
-	if (err) {
-		perror("clock_gettime() failed\n");
-		goto free_vec_out;
-	}
 	for (i = 0; i < measure_batch; i++) {
+		memset(buf, 1, sz_mem_to_hint);
+
+		err = clock_gettime(CLOCK_MONOTONIC, &measure_start);
+		if (err) {
+			perror("clock_gettime() failed\n");
+			goto free_vec_out;
+		}
 		for (start = 0; start < sz_mem_to_hint;
 				start += sz_single_p_madvise) {
 			int j;
@@ -63,15 +67,17 @@ int measure_p_madvise(int hint, int sz_mem_to_hint,
 				goto free_vec_out;
 			}
 		}
+		err = clock_gettime(CLOCK_MONOTONIC, &measure_end);
+		if (err) {
+			perror("clock_gettime() failed\n");
+			goto free_vec_out;
+		}
+		elapsed_ns += measure_end.tv_sec * 1000000000 + measure_end.tv_nsec
+			- measure_start.tv_sec * 1000000000 -
+			measure_start.tv_nsec;
+
 	}
-	err = clock_gettime(CLOCK_MONOTONIC, &measure_end);
-	if (err) {
-		perror("clock_gettime() failed\n");
-		goto free_vec_out;
-	}
-	printf("%lu\n", (measure_end.tv_sec * 1000000000 + measure_end.tv_nsec
-				- measure_start.tv_sec * 1000000000 -
-				measure_start.tv_nsec) / measure_batch);
+	printf("%lu\n", elapsed_ns / measure_batch);
 
 free_vec_out:
 	free(vec);
