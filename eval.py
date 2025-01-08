@@ -15,17 +15,17 @@ def main():
     sz_mem = 256 * 1024 * 1024
 
     print('# <nr_emasures> %d' % nr_measures)
-    print('# <hint> <sz_mem> <sz_madv> <pmadv_batch> <madv|pmadv> <latency>')
+    print('# <hint> <sz_mem> <sz_madv> <pmadv_batch> <madv|pmadv> <latency> <normalized latency>')
 
     sz_madv_pg = 1
     while sz_madv_pg <= 1024:
         sz_madv = sz_madv_pg * 4096
-        latency = int(subprocess.check_output(
+        madv_latency = int(subprocess.check_output(
             ['./eval_madv', '%s' % hint, '%s' % sz_mem, '%s' % sz_madv, '1',
              '%s' % nr_measures]).decode())
         pmadv_batch = 'n/a'
-        print('%s %s %s %s madv %s' %
-              (hint, sz_mem, sz_madv, pmadv_batch, latency))
+        print('%s %s %s %s madv %s 1.0' %
+              (hint, sz_mem, sz_madv, pmadv_batch, madv_latency))
         pmadv_batch = 1
         while pmadv_batch <= 1024:
             sz_p_madv = pmadv_batch * sz_madv
@@ -34,8 +34,8 @@ def main():
             latency = int(subprocess.check_output(
                 ['./eval_pmadv', '%s' % hint, '%s' % sz_mem, '%s' % sz_madv, '%s' %
                  sz_p_madv, '%s' % nr_measures]).decode())
-            print('%s %s %s %s pmadv %s' %
-                  (hint, sz_mem, sz_madv, pmadv_batch, latency))
+            print('%s %s %s %s pmadv %s %.5f' %
+                  (hint, sz_mem, sz_madv, pmadv_batch, latency, latency / madv_latency))
             pmadv_batch *= 2
         sz_madv_pg *= 2
 
