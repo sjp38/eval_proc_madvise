@@ -12,8 +12,7 @@
 
 /* measure time to do madvise() vs process_madvise() */
 
-int measure_madvise(int hint, int sz_mem_to_hint, int sz_single_madvise,
-		int measure_batch)
+int measure_madvise(int hint, int sz_mem_to_hint, int sz_single_madvise)
 {
 	char *buf;
 	int i, err, start;
@@ -66,7 +65,7 @@ out:
 
 void usage(char *cmd)
 {
-	printf("usage: %s <hint> <sz_mem> <sz_madv> <sz_p_madv> <nr_measures>\n", cmd);
+	printf("usage: %s <hint> <sz_mem> <sz_madv> <sz_p_madv>\n", cmd);
 }
 
 int main(int argc, char *argv[])
@@ -76,10 +75,9 @@ int main(int argc, char *argv[])
 	int ret;
 	int hint, sz_mem_to_hint;
 	int sz_single_madvise, sz_single_p_madvise;
-	int measure_batch;
 	int err;
 
-	if (argc != 6) {
+	if (argc != 5) {
 		usage(argv[0]);
 		return -1;
 	}
@@ -88,12 +86,10 @@ int main(int argc, char *argv[])
 	sz_mem_to_hint = atoi(argv[2]);
 	sz_single_madvise = atoi(argv[3]);
 	sz_single_p_madvise = atoi(argv[4]);
-	measure_batch = atoi(argv[5]);
 
 	sz_mem_to_hint = sz_mem_to_hint / SZ_PAGE * SZ_PAGE;
 	sz_single_madvise = sz_single_madvise / SZ_PAGE * SZ_PAGE;
 
-	err = measure_madvise(hint, sz_mem_to_hint, sz_single_madvise,
-			measure_batch);
+	err = measure_madvise(hint, sz_mem_to_hint, sz_single_madvise);
 	return err;
 }
