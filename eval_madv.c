@@ -19,6 +19,7 @@ int measure_madvise(int hint, int sz_mem_to_hint, int sz_single_madvise,
 	int i, err, start;
 	struct timespec measure_start, measure_end;
 	unsigned long elapsed_ns = 0;
+	unsigned long nr_measures = 0;
 
 	buf = mmap(NULL, sz_mem_to_hint, PROT_READ | PROT_WRITE, MAP_PRIVATE |
 			MAP_ANON, -1, 0);
@@ -27,7 +28,7 @@ int measure_madvise(int hint, int sz_mem_to_hint, int sz_single_madvise,
 		return -1;
 	}
 
-	for (i = 0; i < measure_batch; i++) {
+	while (elapsed_ns < 5ul * 1000 * 1000 * 1000) {
 		memset(buf, 1, sz_mem_to_hint);
 
 		err = clock_gettime(CLOCK_MONOTONIC, &measure_start);
@@ -52,8 +53,9 @@ int measure_madvise(int hint, int sz_mem_to_hint, int sz_single_madvise,
 			measure_end.tv_nsec
 			- measure_start.tv_sec * 1000000000 -
 			measure_start.tv_nsec;
+		nr_measures++;
 	}
-	printf("%lu\n", elapsed_ns / measure_batch);
+	printf("%lu\n", elapsed_ns / nr_measures);
 
 out:
 	err = munmap(buf, sz_mem_to_hint);

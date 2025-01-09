@@ -25,6 +25,7 @@ int measure_p_madvise(int hint, int sz_mem_to_hint,
 	int len_vec = sz_single_p_madvise / sz_single_madvise;
 	int ret;
 	unsigned long elapsed_ns = 0;
+	unsigned long nr_measures = 0;
 
 	if (pidfd == -1) {
 		perror("pidfd_open fail");
@@ -44,7 +45,7 @@ int measure_p_madvise(int hint, int sz_mem_to_hint,
 		goto free_buf_out;
 	}
 
-	for (i = 0; i < measure_batch; i++) {
+	while (elapsed_ns < 5ul * 1000 * 1000 * 1000) {
 		memset(buf, 1, sz_mem_to_hint);
 
 		err = clock_gettime(CLOCK_MONOTONIC, &measure_start);
@@ -75,9 +76,10 @@ int measure_p_madvise(int hint, int sz_mem_to_hint,
 		elapsed_ns += measure_end.tv_sec * 1000000000 + measure_end.tv_nsec
 			- measure_start.tv_sec * 1000000000 -
 			measure_start.tv_nsec;
+		nr_measures++;
 
 	}
-	printf("%lu\n", elapsed_ns / measure_batch);
+	printf("%lu\n", elapsed_ns / nr_measures);
 
 free_vec_out:
 	free(vec);
