@@ -15,11 +15,7 @@ def main():
     sz_mem = args.sz_mem
     pg_madv = args.pg_madv
     if pg_madv is None:
-        pg_madv = []
-        pg = 1
-        while pg <= 1024:
-            pg_madv.append(pg)
-            pg *= 2
+        pg_madv = [1]
     sz_pmadv_batch = args.sz_pmadv_batch
     if sz_pmadv_batch is None:
         sz_pmadv_batch = []
